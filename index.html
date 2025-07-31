@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DHL LPN Tracker</title>
+  <style>
+    /* DHL Theme Colors */
+    :root {
+      --dhl-red: #DB0000;
+      --dhl-yellow: #FFCC00;
+      --dhl-black: #000000;
+      --sidebar-width: 260px;
+      --table-header-bg: #f0f0f0;
+      --table-border: #ccc;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* Remove page scroll: container will handle scrolling only */
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: Arial, sans-serif; background-color: #f5f5f5; color: #333; }
+    /* Top Bar */
+    .top-bar {
+      background-color: var(--dhl-red);
+      color: #fff;
+      padding: 15px 20px;
+      font-size: 24px;
+      font-weight: bold;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      align-items: center;
+      z-index: 1000;
+    }
+    .top-bar .logo { height: 32px; margin-right: 12px; }
+    .top-bar .title { flex-grow: 1; }
+    .top-bar .user-info { font-size: 12px; opacity: 0.8; }
+    /* Container below Top Bar */
+    .container {
+      display: flex;
+      position: absolute;
+      top: 50px;
+      left: 0; right: 0; bottom: 0;
+    }
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-width);
+      background-color: var(--dhl-red);
+      color: white;
+      padding: 20px;
+    }
+    /* Rótulos genéricos continuam centralizados ----------------*/
+.sidebar label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 14px;
+  text-align: center;          /* voltou a ser center */
+  cursor: pointer;
+}
+
+/* ESPECÍFICO: botões de ação ficam alinhados à esquerda ------*/
+.sidebar label.action-btn {    /* só os que têm class="action-btn" */
+  text-align: left;
+}
+
+/* Botão de ação (mantém flex-start) -------------------------*/
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* ícone + texto à esquerda */
+  gap: 6px;
+  background: #ffffff;
+  color: var(--dhl-red);
+  border: 2px solid var(--dhl-red);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.action-btn:hover { background: var(--dhl-yellow); }
+.action-btn .icon { width: 18px; height: 18px; fill: currentColor; }
+
+/* Cartões de resumo centralizados novamente ----------------*/
+.summary-card {
+  background-color: #1a1a1a;
+  color: #fff;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  text-align: center;          /* voltou a ser center */
+}
+
+
+
+    .summary-card.dual { display: flex; justify-content: space-around; }
+    .summary-card.dual .item { flex: 1; }
+    .summary-number { font-size: 18px; font-weight: bold; margin-top: 4px; color: var(--dhl-yellow); }
+    /* Location summary table */
+    #locationSummaryTable {
+      width: 100%;
+      margin-top: 10px;
+      border-collapse: collapse;
+      background: #fff;
+      color: #000;
+      font-size: 12px;
+    }
+    #locationSummaryTable th, #locationSummaryTable td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+    #locationSummaryTable th { background: var(--table-header-bg); }
+    #secondarySummaryTable { width: 100%; margin-top: 10px; border-collapse: collapse; background: #fff; color: #000; font-size: 12px; }
+    #secondarySummaryTable th, #secondarySummaryTable td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+    #secondarySummaryTable th { background: var(--table-header-bg); }
+    #secondarySummaryTable tbody tr:nth-child(even) { background-color: #fafafa; }
+    /* Main Content */
+    .main {
+      flex: 1;
+      padding: 20px;
+      overflow: visible;
+      margin-left: 1px;
+    }
+    /* Scroll container with visible scrollbar */
+    #tableContainer {
+      max-height: calc(100vh - 80px);
+      overflow-y: auto;
+    }
+    #tableContainer table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #tableContainer table thead th {
+      position: sticky;
+      top: 0;
+      background-color: var(--table-header-bg);
+      z-index: 2;
+      border: 1px solid var(--table-border);
+      padding: 6px;
+      text-align: left;
+    }
+    #tableContainer table td {
+      border: 1px solid var(--table-border);
+      padding: 6px;
+      text-align: left;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    #tableContainer table tbody tr:nth-child(even) { background-color: #fafafa; }
+    .sidebar-nav { margin-bottom: 16px; }
+    .sidebar-link { display: block; color: #fff; text-decoration: none; padding: 6px 0; font-size: 16px; }
+    .sidebar-link:hover { text-decoration: underline; }
+    .sidebar-table-title { font-family: Arial, sans-serif; font-size: 12px; font-weight: 600; color: #ffffff; text-align: center; margin: 12px 0 4px; text-transform: none; }
+    .main h1 { color: var(--dhl-red); font-size: 20px; margin-bottom: 12px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <img src="dhl-logo.png" alt="DHL Logo" class="logo" />
+    <div class="title">LPN Tracker</div>
+    <div class="user-info">Victor Ribeiro (DHL Supply Chain)</div>
+  </div>
+  <div class="container">
+    <!-- Sidebar -->
+<aside class="sidebar">
+
+  <!-- Ícone de upload definido uma única vez (pode ficar fora da sidebar se preferir) -->
+  <svg style="display:none">
+    <symbol id="icon-upload" viewBox="0 0 24 24">
+      <path d="M5 17v2h14v-2H5zm7-12L8.5 9.5l1.4 1.4 1.6-1.6V16h2V9.3l1.6 1.6 1.4-1.4L12 5z"/>
+    </symbol>
+  </svg>
+
+  <!-- Botão: Upload Weekly CSV -->
+  <label for="csvFile" class="action-btn">
+    <svg class="icon"><use href="#icon-upload"></use></svg>
+    Upload Weekly CSV
+  </label>
+  <input type="file" id="csvFile" accept=".csv" hidden />
+  <div class="status" id="status"></div>
+
+  <!-- Botão: Upload SKU Price File -->
+  <label for="priceFile" class="action-btn">
+  <svg class="icon"><use href="#icon-upload"></use></svg>
+  Upload SKU Price File
+</label>
+<input type="file" id="priceFile" accept=".csv" hidden />
+<!-- ——— NOVO: botão de download ——— -->
+<svg style="display:none">
+  <symbol id="icon-download" viewBox="0 0 24 24">
+    <path d="M5 18h14v2H5v-2zm7-14v9.17l2.59-2.58L16 12l-4 4-4-4 1.41-1.41L11 13.17V4h2z"/>
+  </symbol>
+</svg>
+
+<label id="downloadBtn" class="action-btn">
+  <svg class="icon"><use href="#icon-download"></use></svg>
+  Download Excel
+</label>
+
+
+  <!-- Os cartões de resumo e tabelas permanecem iguais -->
+  <div class="summary-card">Total LPNs<div class="summary-number" id="totalLpn">0</div></div>
+  <div class="summary-card dual">
+    <div class="item">Total Items<div class="summary-number" id="totalQty">0</div></div>
+    <div class="item">Total Value<div class="summary-number" id="totalValue">£0</div></div>
+  </div>
+  <div class="summary-card">Weeks Stored<div class="summary-number" id="weeksStored">0</div></div>
+
+  <h3 class="sidebar-table-title">Dummy Shipped by Location</h3>
+  <table id="locationSummaryTable"><thead><tr><th>Location</th><th>Count</th></tr></thead><tbody></tbody></table>
+
+  <div style="height:8px;"></div>
+
+  <h3 class="sidebar-table-title">Dummy Shipped by Store</h3>
+  <table id="secondarySummaryTable"><thead><tr><th>Store</th><th>Count</th></tr></thead><tbody></tbody></table>
+</aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <h1>Dummy Shipped LPNs</h1>
+      <div id="tableContainer"></div>
+    </main>
+  </div>
+  <script>
+    // IndexedDB setup
+    let db;
+    const request = indexedDB.open('LPNDatabase', 1);
+    request.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains('WeeklyData')) db.createObjectStore('WeeklyData', { keyPath: 'week' }); };
+    request.onerror = e => console.error('IndexedDB error:', e.target.error);
+    request.onsuccess = e => { db = e.target.result; loadAndMergeData([]); };
+
+    // Price map handling
+    let priceMap = {};
+    let displayedData = [];
+    document.getElementById('priceFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const ext = f.name.split('.').pop().toLowerCase();
+
+  if (ext === 'csv') {
+    Papa.parse(f, {
+      header: true,
+      skipEmptyLines: true,
+      worker: true,
+      step: row => {
+        const r     = row.data;
+        const sku   = r['SKU'] || r['SKU_ID'] || r['Sku'] || r['sku'];
+        const price = r['Price'] || r['EACH_VALUE'] || r['price'];
+        if (sku !== undefined && price !== undefined) {
+          priceMap[String(sku).trim()] = parseFloat(price) || 0;
+        }
+      },
+      complete: () => renderTableWithPrices()
+    });
+  } else {
+    alert('Por favor, selecione um arquivo CSV.');
+  }
+});
+ 
+    function renderTableWithPrices() {
+  const tx = db.transaction('WeeklyData','readonly');
+  const store = tx.objectStore('WeeklyData');
+  store.getAll().onsuccess = e => {
+    const allRows = e.target.result.flatMap(rec => rec.rows);
+
+    allRows.forEach(r => {
+  const unitPrice = priceMap[r.sku] || 0;
+  r.value = Math.round(unitPrice * (r.updateQty || 0) * 100) / 100; // 2 casas exatas
+});
+
+
+    /* ------------- NOVO -------------
+       Grava as linhas já com o value calculado,
+       assim o dado permanece após refresh       */
+    persistByWeek(allRows);  // <<<<< ADICIONE ESTA LINHA
+    /* -------------------------------- */
+
+    renderTable(allRows);
+  };
+}
+
+
+    function computeWeek(dateStr) {
+      const [d,m,y] = dateStr.split('/').map(Number);
+      const dt = new Date(y, m-1, d);
+      const sun = new Date(dt); sun.setDate(dt.getDate() - dt.getDay());
+      const yr = sun.getFullYear(), start = new Date(yr,0,1);
+      const wk = Math.floor((sun - start)/(7*24*3600*1000)) +1;
+      return `${yr}-W${String(wk).padStart(2,'0')}`;
+    }
+
+    const columns = [
+      {key:'transactionDate',label:'Transaction Date'}, {key:'week',label:'Week'},
+      {key:'transactionTime',label:'Transaction Time'}, {key:'userId',label:'User ID'},
+      {key:'loader',label:'Loader'}, {key:'code',label:'Code'},
+      {key:'container',label:'Container'}, {key:'fromLocation',label:'From Location'},
+      {key:'toLocation',label:'To Location'}, {key:'workGroup',label:'Work Group'},
+      {key:'group',label:'Group'}, {key:'updateQty',label:'Update Qty'},
+      {key:'sku',label:'SKU'}, {key:'value',label:'Value (£)'}
+    ];
+const gbpFmt = new Intl.NumberFormat('en-GB', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+function formatCurrency(num) {
+  return '£' + gbpFmt.format(Number(num || 0));
+}
+
+    function loadAndMergeData(newRows) {
+      db.transaction('WeeklyData','readonly').objectStore('WeeklyData').getAll().onsuccess = e => {
+        const existing = e.target.result.flatMap(rec => rec.rows);
+        const map = new Map();
+        [...existing, ...newRows].forEach(r => map.set([r.transactionDate,r.transactionTime,r.container,r.sku].join('|'), r));
+        const merged = Array.from(map.values()).sort((a, b) => {
+          // 1) Ordena por container
+          if (a.container !== b.container) {
+            return a.container.localeCompare(b.container);
+          }
+          // 2) Se mesmo container, ordena por data
+          const da = a.transactionDate.split('/').reverse().join('-');
+          const db = b.transactionDate.split('/').reverse().join('-');
+          if (da !== db) {
+            return da.localeCompare(db);
+          }
+          // 3) Se mesma data, ordena por hora
+          return a.transactionTime.localeCompare(b.transactionTime);
+        });
+        renderTable(merged);
+        persistByWeek(merged);
+      };
+    }
+
+    function persistByWeek(rows) {
+      const store = db.transaction('WeeklyData','readwrite').objectStore('WeeklyData');
+      const weeks = {};
+      rows.forEach(r => (weeks[r.week] = weeks[r.week] || []).push(r));
+      Object.entries(weeks).forEach(([w,rs]) => store.put({week: w, rows: rs}));
+    }
+
+    function renderTable(data) {
+  /* mantém na variável global para o botão Download */
+  displayedData = data;
+
+  /* 1) Calcula/atualiza o Value (£) com duas casas */
+  if (Object.keys(priceMap).length) {
+    data.forEach(r => {
+      r.value = Math.round((priceMap[r.sku] || 0) * (r.updateQty || 0) * 100) / 100;
+    });
+  }
+
+  /* 2) Limpa/atualiza contêiner principal */
+  const cont = document.getElementById('tableContainer');
+  cont.innerHTML = '';
+
+  /* 3) Indicadores e cartões de resumo */
+  document.getElementById('status').textContent =
+    data.length ? `Last Container: ${data[data.length - 1].container || ''}` : '';
+
+  document.getElementById('totalLpn').textContent =
+    new Set(data.map(r => r.container)).size;
+
+  document.getElementById('totalQty').textContent =
+    data.reduce((s, r) => s + (r.updateQty || 0), 0);
+
+  const totalVal = data.reduce((s, r) => s + (r.value || 0), 0);
+  document.getElementById('totalValue').textContent = formatCurrency(totalVal);
+
+  /* Weeks Stored */
+  document.getElementById('weeksStored').textContent =
+    new Set(data.map(r => r.week)).size;
+
+  /* 4) Tabela “Dummy Shipped by Location” */
+  const locs = {};
+  const lb = document.querySelector('#locationSummaryTable tbody');
+  lb.innerHTML = '';
+  data.forEach(r => {
+    const init = (r.fromLocation.match(/^[A-Za-z]+/) || [''])[0] || r.fromLocation[0] || '';
+    locs[init] = (locs[init] || 0) + 1;
+  });
+  Object.entries(locs)
+    .sort((a, b) => b[1] - a[1])
+    .forEach(([l, c]) => (lb.innerHTML += `<tr><td>${l}</td><td>${c}</td></tr>`));
+
+  /* 5) Tabela “Dummy Shipped by Store” */
+  const sts = {};
+  const sb = document.querySelector('#secondarySummaryTable tbody');
+  sb.innerHTML = '';
+  data.forEach(r => {
+    const k = r.container.substring(0, 2);
+    (sts[k] || (sts[k] = new Set())).add(r.container);
+  });
+  Object.entries(sts).forEach(
+    ([k, s]) => (sb.innerHTML += `<tr><td>${k}</td><td>${s.size}</td></tr>`)
+  );
+
+  /* 6) Tabela principal */
+  const tbl = document.createElement('table');
+  const thd = tbl.createTHead();
+  const hr = thd.insertRow();
+  columns.forEach(c => {
+    const th = document.createElement('th');
+    th.textContent = c.label;
+    hr.appendChild(th);
+  });
+
+  const bd = tbl.createTBody();
+  data.forEach(r => {
+    const tr = bd.insertRow();
+    columns.forEach(c => {
+      const td = tr.insertCell();
+      if (c.key === 'value') {
+        /* formata somente a coluna Value (£) */
+        td.textContent = formatCurrency(r.value);
+      } else {
+        td.textContent = r[c.key] || '';
+      }
+    });
+  });
+
+  cont.appendChild(tbl);
+}
+
+
+    document.getElementById('csvFile').addEventListener('change', e => {
+      const f = e.target.files[0]; if (!f) return; document.getElementById('status').textContent = 'Parsing CSV...';
+      Papa.parse(f, {header:true,skipEmptyLines:true,worker:true,complete: res => {
+        const rows = res.data, lm = {};
+        rows.forEach(r => { if (/LOAD$/i.test(r['To Location'])) lm[r['Container']] = r['User ID']; });
+        const newRows = rows.filter(r => r['To Location']?.trim() === 'CONTAINER').map(r => ({
+          transactionDate: r['Transaction Date'], week: computeWeek(r['Transaction Date']),
+          transactionTime: r['Transaction Time'], userId: r['User ID'], loader: lm[r['Container']] || '',
+          code: r['Code'], container: r['Container'], fromLocation: r['From Location'], toLocation: r['To Location'],
+          workGroup: r['Work Group'], group: r['User Defined Num 3'], updateQty: Number(r['Update Qty'])||0,
+          sku: r['SKU'], value: 0
+        }));
+        loadAndMergeData(newRows);
+      }});
+    });
+// --- Download Excel (.xlsx) ---------------------------------
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  if (!displayedData.length) return;
+
+  /* util: objeto ➜ linha segundo 'columns' */
+  const objRow = r => { const o={}; columns.forEach(c=>o[c.label]=r[c.key]??'');return o; };
+
+  /* util: label de mês "Jan-2025" */
+  const monthLabel = d => {
+    const [day,mon,yr]=d.split('/').map(Number);
+    return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mon-1] + `-${yr}`;
+  };
+
+  /* util: agrega com chave composta */
+  const sumMap = (arr,key,val)=>arr.reduce((m,r)=>{
+    const k=key(r), v=val(r);
+    m.set(k,(m.get(k)||0)+v); return m; }, new Map());
+
+  /* util: Map → AOA + formatação £ */
+  const toAOA = (hdr,map,split,doFmt=true)=>[
+    hdr,
+    ...[...map.entries()].sort().map(([k,v])=>[
+      ...k.split(split),
+      doFmt ? gbpFmt.format(v) : v
+    ])
+  ];
+
+  /* ---------- 1) All LPNs ---------------------------------- */
+  const allSheet = XLSX.utils.json_to_sheet(
+    displayedData.map(objRow),
+    {header: columns.map(c=>c.label)}
+  );
+
+  /* ---------- 2) Prefix sheets ----------------------------- */
+  const prefixes = ['BR','ME','TR','OX'];
+  const prefixSheets = {};
+  prefixes.forEach(p=>{
+    const rows = displayedData.filter(r=>r.container.startsWith(p));
+    if(rows.length){
+      prefixSheets[p] = XLSX.utils.json_to_sheet(
+        rows.map(objRow),
+        {header: columns.map(c=>c.label)}
+      );
+    }
+  });
+
+  /* ---------- 3) Week / Container / Group ----------------- */
+  const wkCG = sumMap(displayedData,
+    r=>`${r.week}|${r.container}|${r.group}`, r=>r.value||0);
+  const wkCG_AOA = toAOA(['Week','Container','Group','Value (£)'], wkCG, '|');
+  const wkCG_Total = wkCG_AOA.slice(1)
+      .reduce((s,r)=>s+Number(r[3].replace(/,/g,'')),0);
+  wkCG_AOA.push(['Total','','',gbpFmt.format(wkCG_Total)]);
+  const wkCG_Sheet = XLSX.utils.aoa_to_sheet(wkCG_AOA);
+
+  /* ---------- 4) Week / Store / Value --------------------- */
+  const wkStore = sumMap(displayedData,
+    r=>`${r.week}|${r.container.substring(0,2)}`, r=>r.value||0);
+  const wkStore_AOA = toAOA(['Week','Store','Value (£)'], wkStore, '|');
+  const wkStore_Total = wkStore_AOA.slice(1)
+      .reduce((s,r)=>s+Number(r[2].replace(/,/g,'')),0);
+  wkStore_AOA.push(['Total','',gbpFmt.format(wkStore_Total)]);
+  const wkStore_Sheet = XLSX.utils.aoa_to_sheet(wkStore_AOA);
+
+  /* ---------- 5) Month / Container / Group ---------------- */
+  const moCG = sumMap(displayedData,
+    r=>`${monthLabel(r.transactionDate)}|${r.container}|${r.group}`,
+    r=>r.value||0);
+  const moCG_AOA = toAOA(['Month','Container','Group','Value (£)'], moCG, '|');
+  const moCG_Total = moCG_AOA.slice(1)
+      .reduce((s,r)=>s+Number(r[3].replace(/,/g,'')),0);
+  moCG_AOA.push(['Total','','',gbpFmt.format(moCG_Total)]);
+  const moCG_Sheet = XLSX.utils.aoa_to_sheet(moCG_AOA);
+
+  /* ---------- 6) Month / Store / Value -------------------- */
+  const moStore = sumMap(displayedData,
+    r=>`${monthLabel(r.transactionDate)}|${r.container.substring(0,2)}`,
+    r=>r.value||0);
+  const moStore_AOA = toAOA(['Month','Store','Value (£)'], moStore, '|');
+  const moStore_Total = moStore_AOA.slice(1)
+      .reduce((s,r)=>s+Number(r[2].replace(/,/g,'')),0);
+  moStore_AOA.push(['Total','',gbpFmt.format(moStore_Total)]);
+  const moStore_Sheet = XLSX.utils.aoa_to_sheet(moStore_AOA);
+
+  /* ---------- 7) Summary (Location + Store) --------------- */
+  /* Location */
+  const locCnt = sumMap(displayedData,
+    r=>(r.fromLocation.match(/^[A-Za-z]+/)||[''])[0]||r.fromLocation[0]||'',
+    _=>1);
+  const locAOA = [['Location','Count']];
+  let locSum = 0;
+  [...locCnt.entries()].sort((a,b)=>b[1]-a[1]).forEach(([l,c])=>{
+    locAOA.push([l,c]); locSum += c;
+  });
+  locAOA.push(['Total',locSum]);
+
+  /* Store */
+  const stores={}, storeVal={};
+  displayedData.forEach(r=>{
+    const p=r.container.substring(0,2);
+    (stores[p]||(stores[p]=new Set())).add(r.container);
+    storeVal[p]=(storeVal[p]||0)+(r.value||0);
+  });
+  const storeAOA = [['Store','LPNs','Value (£)']];
+  let sumVal=0;
+  Object.entries(stores).forEach(([k,s])=>{
+    const v = storeVal[k]||0;
+    storeAOA.push([k,s.size,gbpFmt.format(v)]);
+    sumVal += v;
+  });
+  storeAOA.push(['Total','',gbpFmt.format(sumVal)]);
+
+  const summarySheet = XLSX.utils.aoa_to_sheet([...locAOA,[],...storeAOA]);
+
+  /* ---------- 8) Monta workbook e baixa ------------------- */
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, allSheet, 'All LPNs');
+  Object.entries(prefixSheets).forEach(([n,ws])=>XLSX.utils.book_append_sheet(wb,ws,n));
+  XLSX.utils.book_append_sheet(wb, wkCG_Sheet,   'Week-Container');
+  XLSX.utils.book_append_sheet(wb, wkStore_Sheet,'Week-Store');
+  XLSX.utils.book_append_sheet(wb, moCG_Sheet,   'Month-Container');
+  XLSX.utils.book_append_sheet(wb, moStore_Sheet,'Month-Store');
+  XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+  const wbout = XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  const blob  = new Blob([wbout],{
+    type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href = url;
+  a.download = `lpn_report_${new Date().toISOString().slice(0,10)}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+
+  </script>
+</body>
+</html>
